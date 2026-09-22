@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TickFlux Zero — One engine, many events in Flowdot</title>
+<link rel="stylesheet" href="tick-journey-flowdot.css">
+</head>
+<body>
+<main>
+  <header>
+    <div><h1 id="heading">TickFlux. Zero engine.</h1><p id="intro">One continuous history: overlapping prices, quiet windows, control messages, overload and delivery.</p></div>
+    <div class="stamp">3 providers · 6 FX spots · 3 subscriber tiers<br><a href="tick-journey-study.html">Original visual study ↗</a></div>
+  </header>
+  <div class="toolbar" aria-label="Journey controls">
+    <button id="play" class="primary" aria-pressed="false">Play the sequence</button>
+    <button id="reset">↺ Reset</button>
+    <label>Story <select id="mode"><option value="engine" selected>The whole engine story</option><option value="overlap">Overlapping arrivals / original</option><option value="single">One tick, step by step</option></select></label>
+    <label id="provider-control" hidden>Provider <select id="provider"><option value="0">Refinitiv</option><option value="1" selected>Bloomberg</option><option value="2">EBS</option></select></label>
+    <label>FX spot <select id="pair"><option value="0">EUR/USD</option><option value="1">USD/JPY</option><option value="2">GBP/USD</option><option value="3">USD/CHF</option><option value="4">AUD/USD</option><option value="5">USD/CAD</option></select></label>
+    <label>Min. move <select id="threshold"><option value="1">1 unit</option><option value="5" selected>5 units</option><option value="10">10 units</option></select></label>
+    <label>Speed <select id="speed"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+    <label>Follow <select id="focus" aria-label="Follow a tick without changing the global clock"><option value="">Latest change</option></select></label>
+    <span id="trace" class="trace"></span>
+  </div>
+  <div class="now-bar"><span id="activity-summary"><span id="logical-clock"></span><span id="moving-count"></span><span id="journey-count"></span></span><span id="next-change"></span></div>
+  <div class="timeline"><output id="clock">0.00 s / 0.0 ms logical</output><input id="scrub" type="range" min="0" max="100" step="0.01" value="0" aria-label="Journey progress in teaching seconds"><button id="previous" aria-label="Previous state change across all ticks">← Previous</button><button id="next">Next state change →</button><button id="finish">See result</button></div>
+  <p id="error" class="error" role="alert" hidden></p>
+  <div class="diagram-scroll" tabindex="0" aria-label="TickFlux engine diagram. Scroll horizontally on smaller screens.">
+    <canvas id="diagram" aria-describedby="diagram-description"></canvas>
+  </div>
+  <section class="inspection" aria-label="Latest state change">
+    <div><p id="beat-label" class="eyebrow"></p><h2 id="beat-title"></h2><p id="explanation"></p><dl id="event-details" class="event-details"></dl><a id="source-link" class="source-link">Source mechanism ↗</a></div>
+    <div id="mechanism" class="mechanism"></div>
+  </section>
+  <nav id="beats" class="beats" aria-label="Journey chapters"></nav>
+  <p id="diagram-description" class="sr-only">Three adapters feed three ingress workers. The last-value cache holds six rows and five reserved provider columns. Nine rings carry instrument IDs and signed control words to three shard pipelines and their reusable Edge slots. Each owner captures now once, visits provider lanes P0 (Refinitiv), P1 (Bloomberg), P2 (EBS), then calls heartbeat with that same time. Interested subscriptions retain one pending value per instrument, then drain to three clients. Use the next state change button to follow without motion.</p>
+  <div class="diagram-key"><span><i class="provider-dot"></i>Provider payload / 64 B</span><span><i class="id-dot"></i>White / instrument ID only</span><span><i class="price-dot"></i>Gold / derived price</span><span><i class="time-dot"></i>Violet / time or control</span><span><i class="reject-dot"></i>Rose / loss or filtered result</span><span>Outlined cells / selected instrument</span></div>
+  <p id="inspector" class="inspector">Hover a component for its role. The state-change explanation is also available without hover.</p>
+  <p id="clock-note" class="clock-note"></p>
+  <div id="story-panels" class="story-panels"><section id="loop-story"></section><section id="policy-story"></section><section id="loss-story"></section></div>
+  <div class="teaching-state">
+    <section aria-label="Timeline across every tick"><div class="section-heading"><h2 id="tracks-heading">All ticks, one clock</h2><p id="tracks-note">Select a row to follow its provenance. Playback and stepping always advance the whole scene.</p></div><div class="track-scroll"><div id="tracks" class="tracks"></div></div><p class="small-note"><span class="track-key provider-key">Payload</span><span class="track-key queue-key">Waiting ID</span><span class="track-key work-key">Shard work</span> · The vertical line is the shared clock.</p></section>
+  </div>
+  <details id="source-details"><summary>The native .flow source</summary><p>Flowdot defines the components, memory slots, routes, travel durations, and visual reactions. JavaScript supplies the prices, exact event order, replay controls, and timestamp annotations. <a href="TICK-JOURNEY-FLOWDOT.md">Implementation notes ↗</a></p><button id="download">Download .flow</button><pre id="source-view" tabindex="0"></pre></details>
+  <p class="footnote">Teaching fixture, not live telemetry. Prices and timing are illustrative; playback stretches logical milliseconds into teaching seconds. Tier intervals are a proposed engine extension. Tick tags, versions, and replacement counts are teaching annotations. Independent tier clocks start at different phases. Teaching holds expose queued IDs and overruns; real processing is vastly faster. Later chapters compress quiet intervals and show one owning shard’s loop. Feed-status messages reach every shard in the engine; other owners’ control copies are not expanded here. Chain changes are explicit teaching checkpoints, not implemented live reconfiguration. LVC reads are idealised, ordered observations, not a claim of atomic 64-byte snapshots. Blend-age exclusion (2,000 ms) and FX quality signalling (500 ms) are separate policies. The complete story includes stale legs and one failed offer.</p>
+  <noscript><p>JavaScript is required for playback. <a href="TICK-JOURNEY-DESIGN.md">Read the complete journey and source audit.</a></p></noscript>
+</main>
+<!-- Generated from tick-journey.flow by npm run sync:tick-journey. -->
+<script id="flow-source" type="text/flow">
+# Canonical diagram source. npm run sync:tick-journey embeds it in the HTML for file:// use.
+# JavaScript supplies exact events and prices; this file owns all nodes, routes and reactions.
+flowdot 1
+diagram "Many ticks, one shared memory" 2040x944 dark
+seed 42
+
+set providers = Refinitiv Bloomberg EBS
+set pairs = EUR/USD USD/JPY GBP/USD USD/CHF AUD/USD USD/CAD
+set tiers = Starter Professional Institutional
+set cadence = 1000 100 10
+
+
+zone engine "TICKFLUX ZERO / ENGINE PROCESS" x:266 y:96 w:1490 h:754
+zone feeds "01 / PROVIDERS" x:16 y:120 w:225 h:716
+zone ingressZone "02 / INGRESS" x:279 y:120 w:156 h:716
+zone market "03 / SHARED MARKET MEMORY" x:450 y:120 w:366 h:716
+zone lanes "04 / NOTIFY" x:834 y:120 w:153 h:716
+zone workers "05 / SHARDS + 8 × 64 B EDGES" x:1004 y:120 w:300 h:716
+zone subscribers "06 / SUBSCRIPTIONS" x:1340 y:120 w:404 h:716
+zone clients "CLIENTS" x:1800 y:120 w:224 h:716
+
+each p in 0..2:
+  node adapter{p} pipeline x:28 y:{181+p*210} w:201 h:100 boxed name:"{providers[p]} / adapter {p}" stages:[tick,wire] pad:46 step:104 nodeR:16 #series{p} inspect:"{providers[p]} reuses a 64-byte canonical scratch buffer. A provider payload crosses Aeron IPC to its ingress worker."
+  node health{p} slot x:291 y:{288+p*210} w:132 h:40 name:"owner / feed status" #series{p} inspect:"Shard-owned provider status. DOWN excludes this provider from the blend; UP permits it subject to age policy. Feed-status control frames are broadcast to all shards; the timeline expands the selected owner."
+  node ingress{p} core x:291 y:{198+p*210} w:132 h:68 name:"Ingress {p}" owns:"P{p} / 64 B scratch" #series{p} inspect:"One writer for provider column P{p}. Copy into reused memory, store the price, then publish only its instrument ID."
+  edge adapter{p}.right -> ingress{p}.in #series{p} alpha:0.55 label:"Aeron"
+
+node cache matrix x:523 y:204 rows:6 cols:5 cw:54 ch:56 gap:4 title:"Last-value cache" rowLabels:["EUR/USD","USD/JPY","GBP/USD","USD/CHF","AUD/USD","USD/CAD"] colLabels:[P0,P1,P2,P3,P4] colColors:[#284f43,#263f5a,#423452,#dim,#dim] inspect:"6 instruments × 5 reserved provider columns × 64 bytes = 1,920 bytes. P0–P2 are active. Each arrival overwrites one cell; other providers keep their latest prices."
+node cacheNote box x:466 y:596 w:332 h:64 name:"64 B / cell · 1,920 B reserved" sub:"bid ×10⁵ / stored ms · P3 + P4 inactive" inspect:"Cell address = (instrument ID × 5 + provider ID) × 64. Fixed-point prices use a scale of 100,000 in this fixture."
+
+each s in 0..2:
+  each p in 0..2:
+    node lane{s}_{p} ring x:849 y:{182+s*210+p*43} r:13 slots:8 label:"P{p} → S{s}" #series{p} inspect:"Provider P{p} to shard S{s}: an SPSC notification lane. The tick word is the instrument ID. Negative words pack control state; tick tags are teaching annotations. Eight-slot teaching ring; actual capacity 131,072. R is the read cursor; W is the write cursor. The numbers beside the ring show both cursors and retained occupancy."
+    edge lane{s}_{p}.out -> work{s}.stage:0 #series{p} alpha:0.25
+  node work{s} pipeline x:1017 y:{181+s*210} w:274 h:96 boxed pinned name:"Shard {s} / {pairs[s]} + {pairs[s+3]}" stages:[join,derive,filter,fanout] pad:34 step:68 nodeR:20 #amber inspect:"One thread owns IDs with id % 3 = {s}. Read the latest provider legs, blend, transform, filter, then fan out. Heartbeat runs after lane visits."
+  node loop{s} pipeline x:1017 y:{337+s*210} w:274 h:44 boxed name:"" stages:[now,P0,P1,P2,HB] pad:22 step:57 nodeR:8 #violet inspect:"One owning-thread pass: cache now, visit each provider lane, then heartbeat with the same now. Heartbeat is a method call here, not an ingress word or an independent timer."
+  each k in 0..7:
+    node edge{s}_{k} slot x:{1024+k*33} y:{291+s*210} w:29 h:40 name:"{k}" #amber inspect:"Shard {s} Edge slot {k}: 64 bytes reused by stages on the same thread. This is not a cross-thread SPSC queue."
+
+each t in 0..2:
+  zone tier{t} "{tiers[t]} / {cadence[t]} ms" x:1352 y:{167+t*210} w:380 h:190
+  each i in 0..5:
+    node shelf{t}_{i} slot x:{1362+(i%3)*120} y:{202+t*210+((i-i%3)/3)*52} w:116 h:44 name:"{pairs[i]}" #amber inspect:"{tiers[t]} / {pairs[i]}: one latest-value slot. Writing while dirty replaces the pending value; draining clears its pending bit. Values shown here are teaching version numbers."
+  node offer{t} slot x:1566 y:{308+t*210} w:154 h:40 name:"drain → offer / version" #amber inspect:"The {tiers[t]} deadline offers only the latest dirty value. Empty drain opportunities emit nothing. An offer can succeed or fail; only a successful offer can produce a receipt."
+  node client{t} slot x:1816 y:{202+t*210} w:192 h:66 name:"Client {t+1} / latest bid" #amber inspect:"Aeron reply stream {12001+t}. This is the price actually received, after a successful offer."
+  node received{t} readout watch:receipts{t} x:1850 y:{281+t*210} w:126 h:46 label:"received" #amber inspect:"Successful receipts at the {tiers[t]} client. Filtered prices, replaced pending values and failed offers never increment this counter."
+  edge offer{t}.out -> client{t}.in #amber alpha:0.45 label:"Aeron IPC"
+
+# Faint native connections keep the complete topology readable when playback is paused.
+# Every active instrument/provider combination has its own cache and notification endpoints.
+each i in 0..5:
+  each p in 0..2:
+    edge ingress{p}.out -> cache.cell:{i}:{p} #series{p} alpha:0.10
+    edge cache.rowRight:{i} -> lane{i%3}_{p}.in #white alpha:0.10
+  edge work{i%3}.stage:3 -> shelf2_{i}.in #amber alpha:0.12
+each i in 0..3:
+  edge work{i%3}.stage:3 -> shelf1_{i}.in #amber alpha:0.12
+set starter = 0 2
+each i in starter:
+  edge work{i%3}.stage:3 -> shelf0_{i}.in #amber alpha:0.12
+
+node arrivalsMeter readout watch:arrivals x:28 y:27 w:130 h:60 label:"arrivals" #emerald inspect:"Provider tick arrivals so far. Heartbeats and control frames are separate events."
+node blendsMeter readout watch:blends x:169 y:27 w:130 h:60 label:"blends" #sky inspect:"Derived candidates produced by arrival reads or due heartbeat windows. A join with no eligible provider produces no candidate."
+node passesMeter readout watch:passed x:310 y:27 w:130 h:60 label:"passed" #amber inspect:"Candidates that passed the configured filter, or continued through a chain with the filter omitted."
+node filteredMeter readout watch:filtered x:451 y:27 w:130 h:60 label:"filtered" #rose inspect:"Candidates stopped by the price or session-aware filter before subscriber shelves are written."
+node queueMeter readout watch:queuedIds x:592 y:27 w:130 h:60 label:"queued IDs" #white inspect:"Unread words retained across the selected owner’s provider lanes. These are instrument IDs or signed control words, never price payloads."
+node movingMeter readout watch:movingPackets x:733 y:27 w:130 h:60 label:"in flight" #sky inspect:"Packets currently travelling through the teaching diagram, including price, notification, control and owner-loop activity."
+node heartbeatMeter readout watch:heartbeats x:874 y:27 w:130 h:60 label:"heartbeats" #violet inspect:"Owner heartbeat calls after provider-lane visits. A call can anchor a window, do nothing, or trigger one due evaluation."
+node absorbedMeter readout watch:absorbed x:1015 y:27 w:130 h:60 label:"absorbed" #violet inspect:"Notifications consumed by a windowed chain without an immediate blend. The price stays in the last-value cache until a due heartbeat reads it."
+node lostMeter readout watch:lostWords x:1156 y:27 w:130 h:60 label:"lapped words" #rose inspect:"Overwritten notification words counted when the reader detects a ring lap. Separate from price filtering, conflation and transport loss."
+node failedMeter readout watch:offerFailures x:1297 y:27 w:130 h:60 label:"failed offers" #rose inspect:"Client publication offers rejected by transport. The drained value is dropped without a retry or receipt."
+node windowClock slot x:28 y:866 w:290 h:56 name:"next window / logical ms" #violet inspect:"Next window boundary in logical milliseconds. The first active heartbeat anchors it; a late beat evaluates once and advances along the original grid."
+node passClock slot x:334 y:866 w:240 h:56 name:"cached pass now / ms" #violet inspect:"Time captured once at the start of the owning shard’s current pass, reused for every tick and heartbeat in that pass."
+node qualityState slot x:590 y:866 w:220 h:56 name:"quality byte / offset 35" #amber inspect:"Eight-bit quality mask in result byte 35. Bits 0, 1 and 2 flag stale or DOWN providers; expected session silence gates these flags. Quality is separate from blend inclusion."
+node sessionState slot x:826 y:866 w:225 h:56 name:"session / owner view" #sky inspect:"Session state applied by this instrument’s owning shard from an ordered control word. HALTED gates expected-silence flags; the session-aware filter resets its baseline on CONTINUOUS."
+node modeState slot x:1067 y:866 w:385 h:56 name:"current chain / teaching checkpoint" #amber inspect:"Operator configuration at this teaching checkpoint: arrivals or a five-second window, filter policy, and optional high/low aggregation."
+node derivedState slot x:1468 y:866 w:544 h:56 name:"derived slots / offsets 48 and 56" #amber inspect:"Reusable result fields at byte offsets 48 and 56. The mid transform uses slot 48; the aggregate chapter stores high and low mids and resets after emission."
+
+
+# Native route templates. The host uses their ports and relative hop durations with
+# FlowSystem.spawn so each overlapping journey has an identity and an exact landing time.
+# JavaScript supplies trace labels and timing; it does not author routes or interpolate motion.
+each i in 0..5:
+  each p in 0..2:
+    on begin_encode_{i}_{p}: spawn adapter{p}.stage:0 ~0.6 adapter{p}.stage:1
+    on begin_copy_{i}_{p}: spawn adapter{p}.stage:1 ~0.55 ingress{p}.center
+    on begin_store_{i}_{p}: spawn ingress{p}.center ~0.8 cache.cell:{i}:{p}
+    on begin_notify_{i}_{p}: spawn cache.rowRight:{i} ~0.65 lane{i%3}_{p}.center
+    on begin_read_{i}_{p}: spawn lane{i%3}_{p}.center ~0.7 work{i%3}.stage:0
+    on seed_cell_{i}_{p}: write cache.{i}.{p} = bid
+    on stored_{i}_{p}: write cache.{i}.{p} = bid
+    on notified_{i}_{p}: push lane{i%3}_{p}
+    on dequeued_{i}_{p}: drain lane{i%3}_{p}
+  on begin_blend_{i}: spawn cache.rowRight:{i} ~0.35 work{i%3}.stage:0 ~0.45 work{i%3}.stage:1
+  on begin_filter_{i}: spawn work{i%3}.stage:1 ~0.8 work{i%3}.stage:2
+  on read_{i}: highlight cache.row:{i}
+  each t in 0..2:
+    on begin_publish_{i}_{t}: spawn work{i%3}.stage:2 ~0.35 work{i%3}.stage:3 ~0.8 shelf{t}_{i}.in
+    on begin_offer_{i}_{t}: spawn shelf{t}_{i}.bottom ~0.3 offer{t}.top
+    on published_{i}_{t}: write shelf{t}_{i} = version
+    on drained_{i}_{t}: clean shelf{t}_{i}
+
+each s in 0..2:
+  each p in 0..2:
+    on seed_ring_{s}_{p}: push lane{s}_{p}; drain lane{s}_{p}
+  each k in 0..7:
+    on blended_{s}_{k}: write edge{s}_{k} = instrument; clean edge{s}_{k}; count blends
+each t in 0..2:
+  on begin_receive_{t}: spawn offer{t}.out ~0.65 client{t}.in
+  on offered_{t}: write offer{t} = version; clean offer{t}
+  on received_{t}: write client{t} = price; clean client{t}; count receipts{t}
+on emitted: count arrivals
+on passed: count passed
+on filtered: count filtered
+on frame_meters: set queuedIds = queueCount; set movingPackets = packetCount
+
+# Additional stories use the same native scene. A heartbeat starts inside the shard;
+# a control frame skips the LVC and enters the provider lane as a self-contained word.
+each s in 0..2:
+  each p in 0..2:
+    on begin_visit_{s}_{p}: spawn loop{s}.stage:{p} ~0.28 loop{s}.stage:{p+1}
+    on begin_control_apply_{s}_{p}: spawn lane{s}_{p}.center ~0.5 loop{s}.stage:{p+1}
+    on begin_absorb_{s}_{p}: spawn lane{s}_{p}.center ~0.4 loop{s}.stage:{p+1}
+  on begin_heartbeat_{s}: spawn loop{s}.stage:3 ~0.4 loop{s}.stage:4
+each i in 0..5:
+  on begin_window_read_{i}: spawn loop{i%3}.stage:4 ~0.7 cache.rowRight:{i}
+  each p in 0..2:
+    on begin_control_copy_{i}_{p}: spawn adapter{p}.stage:1 ~0.55 ingress{p}.center
+    on begin_control_notify_{i}_{p}: spawn ingress{p}.center ~0.65 lane{i%3}_{p}.center
+    # Reconcile one overwritten word: advance R while retaining all surviving occupancy.
+    on reconcile_{i}_{p}: drain lane{i%3}_{p}; surge lane{i%3}_{p} = 1; count lostWords
+each p in 0..2:
+  on health_down_{p}: down cache.col:{p}; write health{p} = status; clean health{p}
+  on health_up_{p}: up cache.col:{p}; write health{p} = status; clean health{p}
+each t in 0..2:
+  on offer_failed_{t}: write offer{t} = version; clean offer{t}; count offerFailures
+on heartbeat: count heartbeats
+on absorbed: count absorbed
+on window_clock: write windowClock = value; clean windowClock
+on pass_clock: write passClock = value; clean passClock
+on quality_state: write qualityState = value; clean qualityState
+on session_state: write sessionState = value; clean sessionState
+on mode_state: write modeState = value; clean modeState
+on derived_state: write derivedState = value; clean derivedState
+</script>
+<script src="flowdot.js"></script>
+<script src="tick-arrival-scenario.js"></script>
+<script src="tick-overlap-scenario.js"></script>
+<script src="tick-engine-story.js"></script>
+<script src="tick-engine-story-view.js"></script>
+<script src="tick-journey-flowdot.js"></script>
+</body>
+</html>
